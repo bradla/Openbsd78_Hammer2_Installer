@@ -859,6 +859,21 @@ enter_inode_untested(hammer2_inode_data_t *ip, hammer2_off_t loff)
 	uint32_t hv;
 	uint32_t hv2;
 	inode_entry_t *scan;
+	int radix;
+
+	/*
+	 * The caller passes the physical media offset of the inode, which is
+	 * block-aligned and therefore has a radix of 0 in its low bits.  A
+	 * data_off with radix 0 makes hammer2_cache_read() read only 1 byte
+	 * (1 << 0), so dump_tree() rejects the inode (psize != sizeof).
+	 * Encode the actual inode radix (log2(sizeof)) so the whole inode is
+	 * read back, exactly as a real blockref would carry it.  This is the
+	 * only path by which PFS-root inodes (which hang off the volume header
+	 * and are never reached via a scanned bref) enter the hash.
+	 */
+	for (radix = 0; ((size_t)1 << radix) < sizeof(*ip); ++radix)
+		;
+	loff |= radix;
 
 	hv = (ip->meta.inum ^ (ip->meta.inum >> 16)) & HTABLE_MASK;
 	hv2 = (ip->meta.inum ^ (ip->meta.inum >> 16) ^ (loff >> 10)) &
