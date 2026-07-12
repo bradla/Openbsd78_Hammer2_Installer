@@ -6,7 +6,7 @@ MAN=	mount_hammer2.8
 
 WARNS=	5
 
-CFLAGS+=	-I../../sys
+CFLAGS+=	-I${.CURDIR}/../../sys
 
 MOUNT=		${BSDSRCDIR}/sbin/mount
 CFLAGS+=	-I${MOUNT}

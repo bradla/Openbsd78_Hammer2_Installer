@@ -560,6 +560,9 @@ again:
 	}
 }
 
+int hammer2_mountroot(void);
+static struct vnode *hammer2_rootdevvp;
+
 /*
  * Mount or remount HAMMER2 fileystem from physical media.
  */
@@ -627,6 +630,27 @@ hammer2_mount(struct mount *mp, const char *path, void *data,
 	}
 
 	/*
+	 * Root mount injection: hammer2_mountroot() stashed the pre-created
+	 * root block-device vnode here.  copyinstr() (userspace fspec) and
+	 * namei() (no /dev yet) do not work at mountroot time, so build a
+	 * one-entry devvp list directly and use the fixed boot label "ROOT".
+	 */
+	if (hammer2_rootdevvp != NULL) {
+		struct vnode *rvp = hammer2_rootdevvp;
+
+		hammer2_rootdevvp = NULL;
+		strlcpy(devstr, "root_device", sizeof(devstr));
+		label = __DECONST(char *, "ROOT");
+		TAILQ_INIT(&devvpl);
+		e = hmalloc(sizeof(*e), M_HAMMER2, M_WAITOK | M_ZERO);
+		e->devvp = rvp;
+		e->path = hstrdup("root_device");
+		e->fname = hstrdup("root_device");
+		TAILQ_INSERT_TAIL(&devvpl, e, entry);
+		goto have_devvp;
+	}
+
+	/*
 	 * Not an update, or updating the name: look up the name
 	 * and verify that it refers to a sensible block device.
 	 */
@@ -678,6 +702,7 @@ hammer2_mount(struct mount *mp, const char *path, void *data,
 	 * check hmp will be non-NULL if we are doing the second or more
 	 * HAMMER2 mounts from the same device.
 	 */
+ have_devvp:
 	hammer2_lk_ex(&hammer2_mntlk);
 	if (!TAILQ_EMPTY(&devvpl)) {
 		/*
@@ -1137,6 +1162,67 @@ next_hmp:
 		debug_hprintf("f_mntfromname=%s != f_mntfromspec=%s\n",
 		    mp->mnt_stat.f_mntfromname, mp->mnt_stat.f_mntfromspec);
 
+	return (0);
+}
+
+/*
+ * Mount HAMMER2 as the root filesystem.  Reached from dk_mountroot() when
+ * the root partition's disklabel fstype is FS_HAMMER2.  Mirrors
+ * ffs_mountroot(): create bdevvp's for swap and root, allocate the mount,
+ * then drive the normal hammer2_mount() path read-only against the root
+ * block device (via the hammer2_rootdevvp injection).  Boot PFS = "ROOT".
+ */
+int
+hammer2_mountroot(void)
+{
+	struct hammer2_mount_info args;
+	struct mount *mp;
+	struct proc *p = curproc;	/* XXX */
+	int error;
+
+	swapdev_vp = NULL;
+	if ((error = bdevvp(swapdev, &swapdev_vp)) ||
+	    (error = bdevvp(rootdev, &rootvp))) {
+		printf("hammer2_mountroot: can't setup bdevvp's\n");
+		if (swapdev_vp)
+			vrele(swapdev_vp);
+		return (error);
+	}
+
+	if ((error = vfs_rootmountalloc("hammer2", "root_device", &mp)) != 0) {
+		vrele(swapdev_vp);
+		vrele(rootvp);
+		return (error);
+	}
+
+	/*
+	 * Boot mount is read-only; init(8) remounts rw later via MNT_UPDATE,
+	 * so no freemap/recovery runs on the boot-critical path.
+	 */
+	mp->mnt_flag |= MNT_RDONLY;
+
+	/* Synthesized local (no-cluster) args; device arrives via injection. */
+	bzero(&args, sizeof(args));
+	args.fspec = NULL;
+	args.hflags = 0;
+	args.cluster_fd = -1;
+	hammer2_rootdevvp = rootvp;
+
+	error = hammer2_mount(mp, "/", &args, NULL, p);
+	if (error) {
+		hammer2_rootdevvp = NULL;
+		vfs_unbusy(mp);
+		vfs_mount_free(mp);
+		vrele(swapdev_vp);
+		vrele(rootvp);
+		printf("hammer2_mountroot: mount failed %d\n", error);
+		return (error);
+	}
+
+	TAILQ_INSERT_TAIL(&mountlist, mp, mnt_list);
+	(void)hammer2_statfs(mp, &mp->mnt_stat, p);
+	vfs_unbusy(mp);
+	inittodr(0);
 	return (0);
 }
 

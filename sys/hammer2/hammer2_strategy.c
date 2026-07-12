@@ -494,7 +494,7 @@ hammer2_xop_strategy_write(hammer2_xop_t *arg, void *scratch, int clindex)
 		parent = NULL; /* safety */
 	}
 	hammer2_xop_feed(&xop->head, NULL, clindex, error);
-	hprintf("STRAT clindex=%d werr=%d\n", clindex, error);
+	/* silenced per-write debug */ (void)error;
 
 	/*
 	 * Complete the bio on behalf of the frontend.  Only the node whose
@@ -509,14 +509,14 @@ hammer2_xop_strategy_write(hammer2_xop_t *arg, void *scratch, int clindex)
 		return;
 	}
 	error = hammer2_xop_collect(&xop->head, HAMMER2_XOP_COLLECT_NOWAIT);
-	hprintf("STRAT collect clindex=%d cerr=%08x\n", clindex, error);
+	/* silenced per-write debug */ (void)error;
 	if (error == HAMMER2_ERROR_EINPROGRESS) {
 		hammer2_mtx_unlock(&xop->lock);
 		return;
 	}
 	xop->finished = 1;
 	hammer2_mtx_unlock(&xop->lock);
-	hprintf("STRAT biodone clindex=%d cerr=%08x\n", clindex, error);
+	/* silenced per-write debug */ (void)error;
 
 	bp = xop->bp; /* now owned by us */
 	if (error == HAMMER2_ERROR_ENOENT || error == 0) {

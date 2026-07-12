@@ -43,6 +43,7 @@
 #include <sys/uio.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
+#include <sys/lockf.h>
 //#include <sys/file.h>
 #include <sys/specdev.h>
 
@@ -62,7 +63,7 @@ hammer2_inactive(void *v)
 		struct vnode *a_vp;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *ip = VTOI(vp);
 
 #ifdef DIAGNOSTIC
@@ -123,7 +124,7 @@ hammer2_reclaim(void *v)
 		struct vnode *a_vp;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_dev_t *hmp;
 	hammer2_devvp_t *e;
 	hammer2_inode_t *ip = VTOI(vp);
@@ -197,7 +198,7 @@ hammer2_fsync(void *v)
 		int a_waitfor;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *ip = VTOI(vp);
 	int error1 = 0, error2;
 
@@ -247,7 +248,7 @@ hammer2_access(void *v)
 		struct ucred *a_cred;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *ip = VTOI(vp);
 
 	return (vaccess(vp->v_type, ip->meta.mode & ALLPERMS,
@@ -265,7 +266,7 @@ hammer2_getattr(void *v)
 		struct ucred *a_cred;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	struct vattr *vap = ap->a_vap;
 	hammer2_inode_t *ip = VTOI(vp);
 	hammer2_pfs_t *pmp = ip->pmp;
@@ -276,7 +277,10 @@ hammer2_getattr(void *v)
 	vap->va_nlink = ip->meta.nlinks;
 	vap->va_uid = hammer2_to_unix_xid(&ip->meta.uid);
 	vap->va_gid = hammer2_to_unix_xid(&ip->meta.gid);
-	vap->va_rdev = NODEV;
+	if (vp->v_type == VCHR || vp->v_type == VBLK)
+		vap->va_rdev = makedev(ip->meta.rmajor, ip->meta.rminor);
+	else
+		vap->va_rdev = NODEV;
 	vap->va_size = ip->meta.size;
 	vap->va_flags = ip->meta.uflags;
 	hammer2_time_to_timespec(ip->meta.ctime, &vap->va_ctime);
@@ -309,7 +313,7 @@ hammer2_setattr(void *v)
 		struct ucred *a_cred;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	struct vattr *vap = ap->a_vap;
 	struct ucred *cred = ap->a_cred;
 	struct uuid uuid_uid, uuid_gid;
@@ -527,7 +531,7 @@ hammer2_readdir(void *v)
 		struct ucred *a_cred;
 		int *a_eofflag;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	struct uio *uio = ap->a_uio;
 	hammer2_xop_readdir_t *xop;
 	hammer2_inode_t *ip = VTOI(vp);
@@ -707,7 +711,7 @@ hammer2_readlink(void *v)
 		struct uio *a_uio;
 		struct ucred *a_cred;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *ip = VTOI(vp);
 
 	if (vp->v_type != VLNK)
@@ -725,7 +729,7 @@ hammer2_read(void *v)
 		int a_ioflag;
 		struct ucred *a_cred;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *ip = VTOI(vp);
 
 	if (vp->v_type == VDIR)
@@ -922,7 +926,7 @@ hammer2_write(void *v)
 		int a_ioflag;
 		kauth_cred_t a_cred;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	struct uio *uio = ap->a_uio;
 	hammer2_inode_t *ip = VTOI(vp);
 	int error;
@@ -1596,7 +1600,7 @@ hammer2_rmdir(void *v)
 	} */ *ap = v;
 	struct componentname *cnp = ap->a_cnp;
 	struct vnode *dvp = ap->a_dvp;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *dip = VTOI(dvp), *ip;
 	hammer2_xop_unlink_t *xop;
 	uint64_t mtime;
@@ -1688,7 +1692,7 @@ hammer2_remove(void *v)
 	} */ *ap = v;
 	struct componentname *cnp = ap->a_cnp;
 	struct vnode *dvp = ap->a_dvp;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *dip = VTOI(dvp), *ip;
 	hammer2_xop_unlink_t *xop;
 	uint64_t mtime;
@@ -1998,7 +2002,7 @@ hammer2_link(void *v)
 	} */ *ap = v;
 	struct componentname *cnp = ap->a_cnp;
 	struct vnode *dvp = ap->a_dvp;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	hammer2_inode_t *tdip = VTOI(dvp); /* target directory to create link in */
 	hammer2_inode_t *ip = VTOI(vp); /* inode we are hardlinking to */
 	uint64_t cmtime;
@@ -2213,7 +2217,7 @@ hammer2_close(void *v)
 		struct ucred *a_cred;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 
 	if (vp->v_usecount > 1)
 		hammer2_itimes_locked(vp);
@@ -2232,7 +2236,7 @@ hammer2_ioctl(void *v)
 		struct ucred *a_cred;
 		struct proc *a_p;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	int error;
 
 	/*
@@ -2273,7 +2277,7 @@ hammer2_pathconf(void *v)
 		int a_name;
 		register_t *a_retval;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	int error = 0;
 
 	switch (ap->a_name) {
@@ -2322,7 +2326,7 @@ hammer2_lock(void *v)
 		struct vnode *a_vp;
 		int a_flags;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 
 	return (rrw_enter(&VTOI(vp)->vnlock, ap->a_flags & LK_RWFLAGS));
 }
@@ -2333,7 +2337,7 @@ hammer2_unlock(void *v)
 	struct vop_unlock_args /* {
 		struct vnode *a_vp;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 
 	rrw_exit(&VTOI(vp)->vnlock);
 
@@ -2346,7 +2350,7 @@ hammer2_islocked(void *v)
 	struct vop_islocked_args /* {
 		struct vnode *a_vp;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 
 	return (rrw_status(&VTOI(vp)->vnlock));
 }
@@ -2385,7 +2389,7 @@ hammer2_kqfilter(void *v)
 		int a_fflag;
 		struct knote *a_kn;
 	} */ *ap = v;
-	struct vnode *vp = ap->a_vp;
+	struct vnode *vp __unused = ap->a_vp;
 	struct knote *kn = ap->a_kn;
 
 	switch (kn->kn_filter) {
@@ -2485,7 +2489,8 @@ hammer2_vinit(struct mount *mp, struct vnode **vpp)
 	case VCHR:
 	case VBLK:
 		vp->v_op = &hammer2_specvops;
-		nvp = checkalias(vp, (dev_t)(uintptr_t)vp, mp);
+		nvp = checkalias(vp,
+		    makedev(ip->meta.rmajor, ip->meta.rminor), mp);
 		if (nvp != NULL) {
 			/*
 			 * Discard unneeded vnode, but save its inode. Note
@@ -2524,6 +2529,22 @@ hammer2_vinit(struct mount *mp, struct vnode **vpp)
 }
 
 /* Global vfs data structures for hammer2. */
+static int
+hammer2_advlock(void *v)
+{
+	struct vop_advlock_args /* {
+		struct vnode *a_vp;
+		void *a_id;
+		int a_op;
+		struct flock *a_fl;
+		int a_flags;
+	} */ *ap = v;
+	hammer2_inode_t *ip = VTOI(ap->a_vp);
+
+	return (lf_advlock(&ip->ip_lockf, ip->meta.size, ap->a_id, ap->a_op,
+	    ap->a_fl, ap->a_flags));
+}
+
 const struct vops hammer2_vops = {
 	.vop_lookup	= hammer2_nresolve,
 	.vop_create	= hammer2_create,
@@ -2557,7 +2578,7 @@ const struct vops hammer2_vops = {
 	.vop_print	= hammer2_print,
 	.vop_islocked	= hammer2_islocked,
 	.vop_pathconf	= hammer2_pathconf,
-	.vop_advlock	= eopnotsupp,
+	.vop_advlock	= hammer2_advlock,
 	.vop_bwrite	= vop_generic_bwrite,
 };
 

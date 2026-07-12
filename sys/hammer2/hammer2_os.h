@@ -59,7 +59,7 @@
 #define HARGS	__func__
 #endif
 
-#define hprintf(X, ...)	printf(HFMT X, HARGS, ## __VA_ARGS__)
+#define hprintf(X, ...)	do { if (hammer2_debug) printf(HFMT X, HARGS, ## __VA_ARGS__); } while (0)
 #define hpanic(X, ...)	panic(HFMT X, HARGS, ## __VA_ARGS__)
 
 #ifdef HAMMER2_INVARIANTS

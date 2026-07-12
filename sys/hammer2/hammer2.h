@@ -758,6 +758,7 @@ struct hammer2_inode {
 	int			ipdep_idx;
 	int			vhold;
 	int			in_seek;	/* FIOSEEKXXX */
+	struct lockf_state	*ip_lockf;	/* byte-range advisory locks */
 };
 
 typedef struct hammer2_inode hammer2_inode_t;
@@ -2069,7 +2070,12 @@ static __inline void
 hammer2_assert_inode_meta(const hammer2_inode_t *ip)
 {
 	KASSERTMSG(ip, "NULL ip");
-	KASSERTMSG(ip->meta.mode, "mode 0");
+	/*
+	 * meta.mode == 0 is VALID: HAMMER2 keeps the object type in
+	 * meta.type and only the permission bits in meta.mode, so a file
+	 * with 0000 permissions legitimately has meta.mode == 0.  Only the
+	 * type must be non-zero for a real inode.
+	 */
 	KASSERTMSG(ip->meta.type, "type 0");
 }
 
