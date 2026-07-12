@@ -2605,7 +2605,15 @@ const struct vops hammer2_specvops = {
 	.vop_ioctl	= spec_ioctl,
 	.vop_kqfilter	= spec_kqfilter,
 	.vop_revoke	= vop_generic_revoke,
-	.vop_fsync	= hammer2_fsync,
+	/*
+	 * MUST be spec_fsync, NOT hammer2_fsync: fsync of a device node
+	 * flushes the DEVICE buffers.  hammer2_fsync would issue an XOP --
+	 * and when the mounted device itself is a node on a HAMMER2 root
+	 * (hmp->devvp aliased to this vnode), the flush backend calls
+	 * VOP_FSYNC(devvp) (hammer2_flush.c volhdr commit) and a nested
+	 * XOP from inside the XOP worker deadlocks the filesystem.
+	 */
+	.vop_fsync	= spec_fsync,
 	.vop_remove	= vop_generic_badop,
 	.vop_link	= vop_generic_badop,
 	.vop_rename	= vop_generic_badop,
